@@ -1,0 +1,15 @@
+:toc: macro 
+
+include::Title5.adoc[lines=1..8]
+
+[.text-center]
+Отчет по лабораторной работе №5 +
+на тему "Типы данных С++"
+
+include::Title5.adoc[lines=12..24]
+
+== Оглавление
+
+toc::[]
+
+== Введение
