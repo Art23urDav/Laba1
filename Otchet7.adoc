@@ -1,0 +1,221 @@
+:toc: macro 
+
+include::Title7.adoc[lines=1..8]
+
+[.text-center]
+Отчет по лабораторной работе №7 +
+на тему "Классы, интерфейсы и SOLID принципы"
+
+include::Title7.adoc[lines=12..24]
+
+== Оглавление
+
+toc::[]
+
+== Введение
+
+Цель: создание шахматного режима мигания светодиодов. 
+
+== SOLID принципы
+
+Задача: рассмотреть принципы SOLID разработки.
+
+SOLID - это принципы разработки программного обеспечения, следуя которым код можно считать хорошим, который в дальнейшем будет хорошо масштабироваться и поддерживаться в рабочем состоянии.
+
+S - Single Responsibility Principle - принцип единственной ответственности. Каждый объект должен иметь одну обязанность и эта обязанность должна быть полностью инкапсулирована в класс, а все его сервисы должны быть направлены исключительно на обеспечение этой обязанности.
+
+O - Open closed Principle - принцип открытости-закрытости. Программные сущности (классы, модули, функции и т. п.) должны быть открыты для расширения, но закрыты для изменения. Это означает, что эти сущности могут менять свое поведение без изменения их исходного кода.
+
+L - Liskov substitution Principle - принцип подстановки Барбары Лисков. Должна быть возможность вместо базового (родительского) типа (класса) подставить любой его подтип (класс-наследник), при этом работа программы не должна измениться. Оригинальное определение Барбары Лисков более формальное и заметно сложнее для восприятия: «В том случае, если q(x) — свойство, верное по отношению к объектам х некого типа T, то свойство q(y) тоже будет верным относительно ряда объектов y, которые относятся к типу S, при этом S — подтип некого типа T». Следование принципу LSP заключается в том, что при построении иерархий наследования создаваемые наследники должны корректно реализовывать поведение базового типа. То есть если базовый тип реализует определённое поведение, то это поведение должно быть корректно реализовано и для всех его наследников.
+
+I -  Interface Segregation Principle - принцип разделения интерфейсов. Данный принцип обозначает, что не нужно заставлять клиента (класс) реализовывать интерфейс, который не имеет к нему отношения. То есть если какой‑то метод интерфейса не используется клиентом, то изменения этого метода не должны приводить к необходимости внесения изменений в клиентский код.
+
+D - Dependency Inversion Principle - принцип инверсии зависимостей. Модули верхнего уровня не должны зависеть от модулей нижнего уровня. И те, и другие должны зависеть от абстракции. Абстракции не должны зависеть от деталей. Детали должны зависеть от абстракций.
+
+== Практическая часть
+
+Класс Ipin:
+
+.main.cpp
+[source, cpp]
+---
+#ifndef IPIN
+#define IPIN
+
+class IPin
+{
+  public:
+  virtual void Toggle() const = 0;
+};
+
+#endif
+---
+
+Подкласс pin:
+
+.main.cpp
+[source, cpp]
+---
+#ifndef PIN
+#define PIN
+
+#include "ipin.h"
+#include "gpioaregisters.hpp" // for GPIOA
+
+template<typename Port, int pinNumber>
+class Pin : public IPin
+{
+public:
+  void Toggle() const override
+  {
+    Port::ODR::Toggle(1<<pinNumber);
+  }
+};
+#endif
+---
+
+Таким образом можно создать массив указателей на Ipin, потому что все pin будут наследниками класса Ipin. Функция Toggle отвечает за установление бита в регистр отвечающий за свечение светодиода.
+
+В main.cpp объявляем переменные типа класса Pin, при этом передавая значения светодиодов (тип порта и номер пина).
+
+.main.cpp
+[source, cpp]
+---
+
+#include "rccregisters.hpp" // for RCC
+#include "gpioaregisters.hpp" // for GPIOA
+#include "gpiocregisters.hpp" // for GPIOС
+#include  "pin.h"
+
+Pin<GPIOA, 5> pin1;
+Pin<GPIOC, 9> pin2;
+Pin<GPIOC, 8> pin3;
+Pin<GPIOC, 5> pin4;
+---
+
+Создадим класс Imode:
+
+.main.cpp
+[source, cpp]
+---
+#ifndef IMODE
+#define IMODE
+
+class IMode
+{
+  public:
+  virtual void Update() = 0;
+};
+
+#endif
+---
+
+Создадим подкласс Chessmode, который будет отвечать за мигание светодиодов в шахматном режиме.
+
+.main.cpp
+[source, cpp]
+---
+#ifndef CHESSMODE
+#define CHESSMODE
+
+#include "imode.h"
+#include <array>
+
+template<auto& ...pins>
+class ChessMode : public IMode
+{
+public:
+  void Update() override
+  {
+    if(x==0){
+        for(int i=0; i<leds.size(); ++i)
+        {
+            if((i%2)==0){
+            leds[i]->Toggle();
+            }
+            
+        }
+        x++;
+    }
+    
+    for(int i=0; i<leds.size(); ++i)
+    {
+      
+      leds[i]->Toggle();
+           
+    }
+    
+  }
+private:
+  std::size_t i=0;
+  std::size_t x=0;
+  std::array<IPin*, sizeof ...(pins)> leds = {static_cast<IPin*> (&pins)...};
+};
+
+#endif
+---
+
+Далее создаем переменную chessMode типа классса ChessMode, передавая переменные pin1, pin2, pin3 и pin4. И вызываем функцию Update().
+
+.main.cpp
+[source, cpp]
+---
+#include "rccregisters.hpp" // for RCC
+#include "gpioaregisters.hpp" // for GPIOA
+#include "gpiocregisters.hpp" // for GPIOС
+#include  "pin.h"
+#include  "treemode.h"
+#include  "chessmode.h"
+#include <iostream>
+
+std::uint32_t SystemCoreClock = 16'000'000U;
+
+void delay(int cycles)
+{
+  for(int i = 0; i < cycles; ++i)    
+  {   
+    asm volatile("");
+  }    
+}
+
+
+Pin<GPIOA, 5> pin1;
+Pin<GPIOC, 9> pin2;
+Pin<GPIOC, 8> pin3;
+Pin<GPIOC, 5> pin4;
+
+ChessMode<pin1, pin2, pin3, pin4> chessMode;
+
+int main()
+{  
+  //Подать тактирование на порт А
+  RCC::AHB1ENR::GPIOAEN::Enable::Set() ;
+  //Подать тактирование на порт С
+  RCC::AHB1ENR::GPIOCEN::Enable::Set() ;
+  //Порта А.5 на вывод
+  GPIOA::MODER::MODER5::Output::Set() ;
+  //Порта C.5,C.8, C.9 на вывод
+  GPIOC::MODER::MODER5::Output::Set() ;
+  GPIOC::MODER::MODER8::Output::Set() ;
+  GPIOC::MODER::MODER9::Output::Set() ;
+  
+  
+  for(;;)
+  {
+   
+     chessMode.Update();
+     
+     delay(1000000);
+  }
+  
+  return 1;
+}
+
+---
+
+== Заключение
+
+В результате рассмотрели SOLID принципы и получили режим мигания светодиодов в шахматном порядке:
+
+.Работа светодиодов в шахматном режиме
+video::Video\Работа светодиодов в шахматном режиме.mp4[]
