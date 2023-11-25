@@ -40,7 +40,7 @@ toc::[]
 
 С помощью портов можно управлять работой других устройств.
 
-Например, можно управлять режимом работы светодиода. На рисунке <<Работа в цифровой режиме>> показан источник питания, резистор, который ограничивает ток и определяет яркость светодиода. Светодиод подключен к питанию, а микроконтроллер подключают вторую часть к земеле в итоге ток течет от + к - и светодиод горит.
+Например, можно управлять режимом работы светодиода. На рисунке <<Работа в цифровой режиме>> показан источник питания, резистор, который ограничивает ток и определяет яркость светодиода. Светодиод подключен к питанию, а микроконтроллер подключают вторую часть к земле в итоге ток течет от + к - и светодиод горит.
 
 .Работа в цифровой режиме
 image::picture\Работа в цифровом режиме.png[]
@@ -126,11 +126,11 @@ main.cpp
 
 Создадим класс Pin в отдельном файле и в ней функцию Toggle, которая позволит менять требуемый бит, с помощью передавемых в класс значений порта и номера порта.
 
-main.cpp
+.pin.h
 [source, cpp]
----
+----
 #ifndef PIN
-#define PIN
+#define PIN 
 
 #include "gpioaregisters.hpp" // for GPIOA
 
@@ -144,13 +144,42 @@ public:
   }
 };
 #endif
----
+----
 
-В результате получим код:
+Создадим отдельный класс TreeMode для работы светодиодов в режиме елочка: 
+
+.treemode.h
+[source, cpp]
+----
+#ifndef TREEMODE
+#define TREEMODE
+
+#include <array>
+
+template<auto& ...pins>
+class TreeMode : public IMode
+{
+public:
+  void Update() override
+  {
+    leds[LEDposition++]->Toggle();
+    if(LEDposition== leds.size())
+    {
+      LEDposition=0;
+    }
+  }
+private:
+  std::size_t LEDposition=0;
+  std::array<IPin*, sizeof ...(pins)> leds = {static_cast<IPin*> (&pins)...};
+};
+#endif
+----
+
+Код в main:
 
 main.cpp
 [source, cpp]
----
+----
 #include "rccregisters.hpp" // for RCC
 #include "gpioaregisters.hpp" // for GPIOA
 #include "gpiocregisters.hpp" // for GPIOС
@@ -174,28 +203,12 @@ void delay(int cycles)
   }    
 }
 
-template<auto& pin1, auto& pin2, auto& pin3, auto& pin4>
-class Elochka
-{
-public:
-  void ToggleElochka()
-  {
-    pin1.Toggle();
-    delay(1000000);
-    pin2.Toggle();
-    delay(1000000);
-    pin3.Toggle();
-    delay(1000000);
-    pin4.Toggle();
-    delay(1000000);
-  }
-};
-
 Pin<GPIOA, 5> pin1;
 Pin<GPIOC, 9> pin2;
 Pin<GPIOC, 8> pin3;
 Pin<GPIOC, 5> pin4;
-Elochka<pin1, pin2, pin3, pin4> elochka;
+
+TreeMode<pin1, pin2, pin3, pin4> treeMode; 
 
 
 int main()
@@ -216,7 +229,7 @@ int main()
   for(;;)
   {
         
-     elochka.ToggleElochka();
+     treeMode.Update();
      
      delay(1000000);
   }
@@ -224,7 +237,7 @@ int main()
   return 1;
 }
 
----
+----
 
 
 === Результат
