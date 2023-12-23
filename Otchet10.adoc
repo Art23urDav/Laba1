@@ -1,0 +1,380 @@
+:toc: macro 
+
+include::Title10.adoc[lines=1..8]
+
+[.text-center]
+Отчет по лабораторной работе №10 +
+на тему "Прерывание"
+
+include::Title10.adoc[lines=12..24]
+
+== Оглавление
+
+toc::[]
+
+== Введение
+
+Цель: Написать программу моргания всеми 4 светодиодами на плате с периодом в 0.5 секунды. По нажатию кнопки увеличивать период моргания на 0.1 секунды. Реализовать обработку кнопки по таймеру 2. Мигание светодиодов по таймеру 5.
+
+== Практическая часть
+
+=== Программа обработки кнопки и установки флага по таймеру 2
+
+.timer2.h
+[source, cpp]
+----
+#ifndef TIMER2
+#define TIMER2
+
+#include "tim2registers.hpp" // for TIMER 2
+
+template<auto& button>
+class Timer2
+{
+public:
+   static void handler()
+   {
+
+     if(TIM2::SR::UIF::InterruptPending::IsSet() and TIM2::DIER::UIE::Enable::IsSet())
+     {
+       button.ButtonProcessing();
+       
+       if(button.IsPressed())
+       {
+          button.SetUpdateFlag();
+       } 
+       else
+       {
+          button.ResetUpdateFlag();
+
+       }
+       
+       TIM2::SR::UIF::NoInterruptPending::Set();
+
+     }
+       
+   }
+};
+#endif
+----
+
+
+=== Программа установки флага по таймеру 5
+
+После установки флага по таймеру 5 светодиоды должны, либо загореться, либо потухнуть.
+
+.timer5.h
+[source, cpp]
+----
+#ifndef TIMER5
+#define TIMER5
+
+#include "tim5registers.hpp" // for TIMER 5
+
+template<auto& allMode>
+class Timer5
+{
+public:
+   static void handler()
+   {
+
+     if(TIM5::SR::UIF::InterruptPending::IsSet() and TIM5::DIER::UIE::Value1::IsSet())
+     {
+       allMode.SetUpdateFlag();
+       
+       TIM5::SR::UIF::NoInterruptPending::Set();
+     }
+     
+   }
+};
+#endif
+----
+
+=== Программа обработки таймеров
+
+.timerconfig.h
+[source, cpp]
+----
+#ifndef TIMERCONFIG
+#define TIMERCONFIG
+
+#include "timer2.h"
+#include "timer5.h"
+
+#include  "pin.h"
+#include "chessmode.h"
+#include  "allmode.h"
+
+#include  "buttonnextmode.h"
+
+#include "gpioaregisters.hpp" // for GPIOA
+#include "gpiocregisters.hpp" // for GPIOÑ
+
+extern Pin<GPIOA, 5> pin1;
+extern Pin<GPIOC, 9> pin2;
+extern Pin<GPIOC, 8> pin3;
+extern Pin<GPIOC, 5> pin4;
+
+extern ButtonNextMode<GPIOC, 13> button;
+
+extern AllMode<pin1, pin2, pin3, pin4> allMode;
+
+using tTimer2 = Timer2<button>;
+using tTimer5 = Timer5<allMode>;
+
+
+#endif
+----
+
+=== Программа работы кнопки
+
+.button.h
+[source, cpp]
+----
+#ifndef BUTTON
+#define BUTTON
+
+#include "gpioaregisters.hpp" // for GPIOA
+
+template<typename Port, int pinNumber>
+class Button
+{
+public:
+  void ButtonProcessing() 
+  {
+    
+    previouspositionbutton = buttonposition;
+    buttonposition = ((Port::IDR::Get() & (1<<pinNumber)) != (1<<pinNumber));
+    
+    IsPressedButton = (previouspositionbutton and not buttonposition);
+    
+  }
+  bool IsPressed() const
+  {
+    return IsPressedButton;
+  }
+  bool SetUpdateFlag() 
+  {
+    FlagTimer = true;
+  }
+  bool ResetUpdateFlag()
+  {
+    FlagTimer = false;
+  }
+  bool FlagTimer = false; 
+  std::size_t buttonposition;
+  std::size_t previouspositionbutton;
+  bool IsPressedButton = false;
+};
+
+#endif
+----
+
+=== Программа мигания всех светодиодов
+
+.allmode.h
+[source, cpp]
+----
+
+#ifndef ALLMODE
+#define ALLMODE
+
+#include "imode.h" // for IMode
+#include "ipin.h" // for IPin 
+#include <cstddef> // for std::size_t
+#include <array> // for std::array
+
+template<auto& ...pins>
+class AllMode : public IMode
+{
+public:
+  void Update() override
+  {
+    for(int LEDposition=0; LEDposition<leds.size(); ++LEDposition)
+        {
+            leds[LEDposition]->Toggle();
+        }
+  }
+  void StartPosition() override
+  {
+      LEDposition =0;
+      for(auto it: leds)
+      {
+          it->SetLow();
+      }
+  }
+  bool SetUpdateFlag() 
+  {
+    FlagTimer = true;
+  }
+  bool ResetUpdateFlag() 
+  {
+    FlagTimer = false;
+  }
+
+  bool FlagTimer = false; 
+   
+private:
+  std::size_t LEDposition=0;
+  std::array<IPin*, sizeof ...(pins)> leds = {static_cast<IPin*> (&pins)...};
+};
+
+#endif
+
+----
+
+=== Программа для изменения периода мигания 
+
+.arrtimer.h
+[source, cpp]
+----
+#ifndef ARRTIMER
+#define ARRTIMER
+
+#include "tim2registers.hpp" // for TIMER 2
+#include "tim5registers.hpp" // for TIMER 5
+
+template<typename Timer>
+class ARRTimer
+{
+public:
+  void ChangeARRTimer(std::uint32_t period)
+  {
+    Timer::ARR::Write(period);
+  }
+
+};
+
+
+#endif
+----
+
+
+=== main 
+
+.main.cpp
+[source, cpp]
+----
+#include "rccregisters.hpp" // for RCC
+#include "gpioaregisters.hpp" // for GPIOA
+#include "gpiocregisters.hpp" // for GPIOÑ
+
+#include "stkregisters.hpp" // for SYSTEM TIMER
+#include "scbregisters.hpp" // for SYSTEM TIMER
+#include "tim2registers.hpp" // for TIMER 2
+#include "tim5registers.hpp" // for TIMER 5
+#include "nvicregisters.hpp"
+
+#include  "arrtimer.h" // for ARRTimer
+
+#include  "pin.h"
+#include  "treemode.h"
+#include  "chessmode.h"
+#include  "basemode.h"
+#include  "allmode.h"
+#include  "garland.h"
+#include  "button.h"
+#include <iostream>
+
+std::uint32_t freqTIM2 = 1'000'000U;
+std::uint32_t SystemCoreClock = 16'000'000U;
+std::uint32_t period = 500U;
+
+extern "C" 
+{
+int __low_level_init(void)
+{ 
+  STK::CTRL::CLKSOURCE::CpuClock::Set();
+  
+  RCC::APB1ENR::TIM2EN::Enable::Set();
+  RCC::APB1ENR::TIM5EN::Enable::Set();
+  
+  NVIC::ISER0::Write(1<<28U);
+  NVIC::ISER1::Write(1<<18U);
+  
+  const auto TimerDevider = SystemCoreClock / 1'000;
+  const auto PSCTimer5 = (SystemCoreClock / 1'000)-1;
+    
+  TIM2::PSC::Write(TimerDevider);
+  TIM2::CR1::URS::OverflowEvent::Set();
+  TIM2::ARR::Write(100U);
+  TIM2::SR::UIF::Set(0);
+  TIM2::CNT::Write(0);
+  TIM2::DIER::UIE::Enable::Set();  
+  
+  TIM5::PSC::Write(PSCTimer5);
+  TIM5::CR1::URS::Value1::Set();
+  TIM5::ARR::Write(500U);
+  TIM5::SR::UIF::Set(0);
+  TIM5::CNT::Write(0);
+  TIM5::DIER::UIE::Value1::Set();
+
+ 
+  
+  return 1;
+
+}
+}
+
+using tMsec = std::uint32_t;
+
+
+Pin<GPIOA, 5> pin1;
+Pin<GPIOC, 9> pin2;
+Pin<GPIOC, 8> pin3;
+Pin<GPIOC, 5> pin4;
+
+BaseMode<pin1, pin2, pin3, pin4> baseMode;
+TreeMode<pin1, pin2, pin3, pin4> treeMode; 
+ChessMode<pin1, pin2, pin3, pin4> chessMode;
+AllMode<pin1, pin2, pin3, pin4> allMode;
+Garland<treeMode, chessMode, allMode> garland;
+
+Button<GPIOC, 13> button;
+
+ARRTimer<TIM5> ARRTimer5;
+
+int main()
+{  
+  //Ïîäàòü òàêòèðîâàíèå íà ïîðò À
+  RCC::AHB1ENR::GPIOAEN::Enable::Set() ;
+  //Ïîäàòü òàêòèðîâàíèå íà ïîðò Ñ
+  RCC::AHB1ENR::GPIOCEN::Enable::Set() ;
+  //Ïîðòà À.5 íà âûâîä
+  GPIOA::MODER::MODER5::Output::Set() ;
+  //Ïîðòà C.5,C.8, C.9 íà âûâîä
+  GPIOC::MODER::MODER5::Output::Set() ;
+  GPIOC::MODER::MODER8::Output::Set() ;
+  GPIOC::MODER::MODER9::Output::Set() ;
+  //Ïîðò Ñ.13 íà ââîä
+  GPIOC::MODER::MODER13::Input::Set() ;
+  TIM2::CR1::CEN::Enable::Set();
+  TIM5::CR1::CEN::Enable::Set();
+
+
+  for(;;)
+  {
+     if(button.FlagTimer == true)
+     {
+        period = (period < tMsec(1000U)) ? (period + tMsec(100U)) : tMsec(500U);
+        ARRTimer5.ChangeARRTimer(period);
+        button.ResetUpdateFlag();
+      
+     }
+     if(allMode.FlagTimer == true){
+        allMode.Update();
+        allMode.ResetUpdateFlag(); 
+     }
+     
+    
+  
+  }
+  
+  return 1;
+}
+----
+
+== Результат работы программы 
+
+.Результат работы программы 
+video::https://www.veed.io/view/8b0b2d3b-6ffc-427a-84aa-5bcbec24668e?sharingWidget=true&panel=share[]
