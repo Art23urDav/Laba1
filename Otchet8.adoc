@@ -27,9 +27,9 @@ image::UML диаграмма программы работы гирлянды.j
 
 Класс Pin
 
-.Pin.h
+.pin.h
 [source, cpp]
----
+----
 #ifndef PIN
 #define PIN
 
@@ -50,14 +50,14 @@ public:
   }
 };
 #endif
----
+----
 
 
 Класс IPin
 
-.IPin.h
+.ipin.h
 [source, cpp]
----
+----
 #ifndef IPIN
 #define IPIN
 
@@ -69,7 +69,7 @@ class IPin
 };
 
 #endif
----
+----
 
 == Классы отвечающие за режимы и интерфесный класс IMode
 
@@ -86,7 +86,7 @@ class IPin
 
 .chessmode.h
 [source, cpp]
----
+----
 
 #ifndef CHESSMODE
 #define CHESSMODE
@@ -122,12 +122,12 @@ private:
 };
 
 #endif
----
+----
 
 
 .allmode.h
 [source, cpp]
----
+----
 
 #ifndef ALLMODE
 #define ALLMODE
@@ -161,11 +161,11 @@ private:
 
 #endif
 
----
+----
 
 .treemode.h
 [source, cpp]
----
+----
 
 #ifndef TREEMODE
 #define TREEMODE
@@ -200,11 +200,11 @@ private:
 
 #endif
 
----
+----
 
 .imode.h
 [source, cpp]
----
+----
 
 #ifndef IMODE
 #define IMODE
@@ -218,7 +218,7 @@ class IMode
 
 #endif
 
----
+----
 
 === Класс Garland 
 
@@ -226,7 +226,7 @@ class IMode
 
 .garland.h
 [source, cpp]
----
+----
 
 #ifndef GARLAND
 #define GARLAND
@@ -260,7 +260,7 @@ private:
 };
 
 #endif
---- 
+----
 
 === Класс ButtonNextMode
 
@@ -268,7 +268,7 @@ private:
 
 .buttonnextmode.h
 [source, cpp]
----
+----
 #ifndef BUTTONNEXTMODE
 #define BUTTONNEXTMODE
 
@@ -282,14 +282,15 @@ public:
   {
     
     previouspositionbutton = buttonposition;
-    buttonpositionresult = ((Port::IDR::Get()&(1<<pinNumber))!=(1<<pinNumber));
-    if((previouspositionbutton==1) && (buttonposition==0))
-    {
-      IsPressedButton=1;
-    } else 
-    {
-      IsPressedButton=0;
-    }
+    buttonposition = ((Port::IDR::Get() & (1<<pinNumber)) != (1<<pinNumber));
+    
+    IsPressedButton = (previouspositionbutton and not buttonposition);
+    
+  }
+  bool IsPressed() const
+  {
+    return IsPressedButton;
+  }
 
   }
   std::size_t buttonposition;
@@ -298,7 +299,7 @@ public:
 };
 
 #endif
---- 
+----
 
 === main
 
@@ -313,7 +314,7 @@ public:
 
 .main.cpp
 [source, cpp]
----
+----
 
 #include "rccregisters.hpp" // for RCC
 #include "gpioaregisters.hpp" // for GPIOA
@@ -384,7 +385,7 @@ int main()
   return 1;
 }
 
----
+----
 
 == Заключение 
 
