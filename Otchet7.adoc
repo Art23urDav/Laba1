@@ -36,9 +36,9 @@ D - Dependency Inversion Principle - принцип инверсии завис�
 
 Класс Ipin:
 
-.main.cpp
+.ipin.h
 [source, cpp]
----
+----
 #ifndef IPIN
 #define IPIN
 
@@ -49,13 +49,13 @@ class IPin
 };
 
 #endif
----
+----
 
 Подкласс pin:
 
-.main.cpp
+.pin.h
 [source, cpp]
----
+----
 #ifndef PIN
 #define PIN
 
@@ -72,7 +72,7 @@ public:
   }
 };
 #endif
----
+----
 
 Таким образом можно создать массив указателей на Ipin, потому что все pin будут наследниками класса Ipin. Функция Toggle отвечает за установление бита в регистр отвечающий за свечение светодиода.
 
@@ -80,7 +80,7 @@ public:
 
 .main.cpp
 [source, cpp]
----
+----
 
 #include "rccregisters.hpp" // for RCC
 #include "gpioaregisters.hpp" // for GPIOA
@@ -97,7 +97,7 @@ Pin<GPIOC, 5> pin4;
 
 .main.cpp
 [source, cpp]
----
+----
 #ifndef IMODE
 #define IMODE
 
@@ -108,13 +108,13 @@ class IMode
 };
 
 #endif
----
+----
 
 Создадим подкласс Chessmode, который будет отвечать за мигание светодиодов в шахматном режиме.
 
-.main.cpp
+.chessmode.h
 [source, cpp]
----
+----
 #ifndef CHESSMODE
 #define CHESSMODE
 
@@ -127,39 +127,37 @@ class ChessMode : public IMode
 public:
   void Update() override
   {
-    if(x==0){
-        for(int i=0; i<leds.size(); ++i)
-        {
-            if((i%2)==0){
-            leds[i]->Toggle();
-            }
-            
-        }
-        x++;
-    }
-    
-    for(int i=0; i<leds.size(); ++i)
+    for(int LEDposition=0; LEDposition<leds.size(); ++LEDposition)
     {
-      
-      leds[i]->Toggle();
-           
+      leds[LEDposition]->Toggle();
     }
-    
+  }
+  void StartPosition() override
+  {
+    for(auto it: leds)
+    {
+        it->SetLow();
+    }
+    for(int LEDposition=0; LEDposition<leds.size(); LEDposition+=2)
+    {
+      leds[LEDposition]->Toggle();
+    }
   }
 private:
-  std::size_t i=0;
-  std::size_t x=0;
+  std::size_t LEDposition=0;
   std::array<IPin*, sizeof ...(pins)> leds = {static_cast<IPin*> (&pins)...};
 };
 
 #endif
----
+
+----
 
 Далее создаем переменную chessMode типа классса ChessMode, передавая переменные pin1, pin2, pin3 и pin4. И вызываем функцию Update().
 
 .main.cpp
 [source, cpp]
----
+----
+
 #include "rccregisters.hpp" // for RCC
 #include "gpioaregisters.hpp" // for GPIOA
 #include "gpiocregisters.hpp" // for GPIOС
@@ -210,8 +208,8 @@ int main()
   
   return 1;
 }
-
 ---
+
 
 == Заключение
 
